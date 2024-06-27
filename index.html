@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zeno's Paradox: Multi-Circle Odyssey</title>
+    <style>
+        body, html { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: Arial, sans-serif; }
+        #c { position: absolute; top: 0; left: 0; }
+        #ui { position: absolute; width: 100%; padding: 20px; box-sizing: border-box; color: #fff; text-align: center; pointer-events: none; }
+        #counter { font-size: 24px; margin-bottom: 10px; }
+        #message { font-size: 18px; opacity: 0; transition: opacity 1s; }
+        #progress { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 80%; height: 4px; background: rgba(255,255,255,0.2); }
+        #bar { width: 0; height: 100%; background: #fff; transition: width 0.1s; }
+    </style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <div id="ui">
+        <div id="counter">Rotations: 0</div>
+        <div id="message"></div>
+        <div id="progress"><div id="bar"></div></div>
+    </div>
+    <script>
+        const c = document.getElementById('c'),
+              ctx = c.getContext('2d'),
+              counter = document.getElementById('counter'),
+              message = document.getElementById('message'),
+              bar = document.getElementById('bar');
+
+        let w, h, cx, cy, radius, angle = 0, rotations = 0, lastAngle = 0,
+            fractalDepth = 1, timeDilation = 1, particles = [],
+            complexityPhase = 1, maxComplexity = 99;
+
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        let additionalCircles = [];
+
+        const resize = () => {
+            c.width = w = window.innerWidth;
+            c.height = h = window.innerHeight;
+            cx = w / 2; cy = h / 2;
+            radius = Math.min(w, h) * 0.4;
+        };
+
+        const drawFractal = (x, y, r, depth) => {
+            if (depth <= 0) return;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, 2 * Math.PI);
+            ctx.strokeStyle = `hsla(${Math.abs(rotations) * 10 % 360}, 80%, 50%, ${0.7 / depth})`;
+            ctx.lineWidth = 2 / depth;
+            ctx.stroke();
+            
+            const childCount = 5 + Math.floor(Math.abs(rotations) / 10);
+            for (let i = 0; i < childCount; i++) {
+                const angle = (i / childCount) * 2 * Math.PI;
+                const childX = x + Math.cos(angle) * r * 0.5;
+                const childY = y + Math.sin(angle) * r * 0.5;
+                drawFractal(childX, childY, r * 0.3, depth - 1);
+            }
+        };
+
+        const drawLine = () => {
+            const x = cx + Math.cos(angle) * radius;
+            const y = cy + Math.sin(angle) * radius;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(x, y);
+            ctx.strokeStyle = `hsl(${Math.abs(rotations) * 10 % 360}, 100%, 50%)`;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, 2 * Math.PI);
+            ctx.fillStyle = `hsl(${Math.abs(rotations) * 10 % 360}, 100%, 50%)`;
+            ctx.fill();
+        };
+
+        const updateParticles = () => {
+            particles.forEach((p, i) => {
+                p.x += p.vx * timeDilation;
+                p.y += p.vy * timeDilation;
+                p.life -= timeDilation;
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, 2 * Math.PI);
+                    ctx.fillStyle = `hsla(${p.hue}, 100%, 50%, ${p.life / 50})`;
+                    ctx.fill();
+                }
+            });
+        };
+
+        const addParticles = () => {
+            const x = cx + Math.cos(angle) * radius;
+            const y = cy + Math.sin(angle) * radius;
+            for (let i = 0; i < 5; i++) {
+                particles.push({
+                    x, y,
+                    vx: (Math.random() - 0.5) * 2 * (Math.abs(rotations) / maxComplexity),
+                    vy: (Math.random() - 0.5) * 2 * (Math.abs(rotations) / maxComplexity),
+                    size: Math.random() * 3 + 1,
+                    life: 50 * (Math.abs(rotations) / maxComplexity),
+                    hue: (Math.abs(rotations) * 10) % 360
+                });
+            }
+        };
+
+        const drawAdditionalCircles = () => {
+            additionalCircles.forEach((circle, index) => {
+                ctx.beginPath();
+                ctx.arc(circle.x, circle.y, circle.radius, 0, 2 * Math.PI);
+                ctx.strokeStyle = `hsla(${(rotations * 10 + index * 30) % 360}, 80%, 50%, 0.5)`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                const barEndX = circle.x + Math.cos(circle.angle) * circle.radius;
+                const barEndY = circle.y + Math.sin(circle.angle) * circle.radius;
+                ctx.beginPath();
+                ctx.moveTo(circle.x, circle.y);
+                ctx.lineTo(barEndX, barEndY);
+                ctx.strokeStyle = `hsla(${(rotations * 10 + index * 30) % 360}, 100%, 70%, 0.8)`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            });
+        };
+
+        const updateAdditionalCircles = (deltaAngle) => {
+            additionalCircles.forEach(circle => {
+                circle.angle += deltaAngle * circle.speed;
+                circle.angle %= (2 * Math.PI);
+            });
+        };
+
+        const update = () => {
+            ctx.clearRect(0, 0, w, h);
+            drawFractal(cx, cy, radius, fractalDepth);
+            drawLine();
+            updateParticles();
+            drawAdditionalCircles();
+            
+            if (lastAngle > angle) {
+                rotations += complexityPhase;
+                updateComplexity();
+                counter.textContent = `Rotations: ${Math.abs(rotations)}`;
+                if (Math.abs(rotations) % 5 === 0) displayMessage();
+            }
+            lastAngle = angle;
+            
+            bar.style.width = `${(angle / (2 * Math.PI)) * 100}%`;
+            requestAnimationFrame(update);
+        };
+
+        const updateComplexity = () => {
+            if (rotations >= maxComplexity) {
+                complexityPhase = -1;
+            } else if (rotations <= 0) {
+                complexityPhase = 1;
+            }
+            fractalDepth = Math.min(5, 1 + Math.floor(Math.abs(rotations) / 20));
+            timeDilation = 1 / (1 + Math.abs(rotations) * 0.01);
+            radius = Math.min(w, h) * 0.4 * (1 - Math.abs(rotations) / (maxComplexity * 2));
+
+            if (rotations >= 20 && rotations % 10 === 0 && additionalCircles.length < 5) {
+                const angle = Math.random() * 2 * Math.PI;
+                const distance = radius * (0.5 + Math.random() * 0.3);
+                additionalCircles.push({
+                    x: cx + Math.cos(angle) * distance,
+                    y: cy + Math.sin(angle) * distance,
+                    radius: radius * (0.2 + Math.random() * 0.2),
+                    angle: 0,
+                    speed: 0.5 + Math.random() * 1.5
+                });
+            }
+        };
+
+        const moveBar = (newAngle) => {
+            const maxMove = Math.PI * 0.6;
+            let deltaAngle = newAngle - angle;
+            if (deltaAngle > Math.PI) deltaAngle -= 2 * Math.PI;
+            if (deltaAngle < -Math.PI) deltaAngle += 2 * Math.PI;
+            deltaAngle = Math.max(-maxMove, Math.min(maxMove, deltaAngle));
+            angle += deltaAngle;
+            if (angle < 0) angle += 2 * Math.PI;
+            if (angle >= 2 * Math.PI) angle -= 2 * Math.PI;
+            updateAdditionalCircles(deltaAngle);
+            playSound(deltaAngle);
+            addParticles();
+        };
+
+        const messages = [
+            "In the infinitesimal, eternity dwells.",
+            "The path unwalked stretches infinitely.",
+            "Between thought and action, universes unfold.",
+            "To move is to remain still in infinity's gaze.",
+            "In division, we find the indivisible.",
+            "The journey's end: a mirage in time's desert.",
+            "Stillness is motion viewed from eternity.",
+            "In pursuit of the horizon, we circle our starting point.",
+            "The faster we move, the more stationary we become.",
+            "In the dance of atoms, the universe contemplates itself.",
+            "To reach the destination is to deny the journey.",
+            "In each moment, infinity hesitates.",
+            "The arrow of time splinters against paradox's wall.",
+            "In the space between spaces, truth resides.",
+            "To cross the room is to traverse the cosmos.",
+            "In the instant of now, eternity pauses.",
+            "The tortoise outpaces light in time's labyrinth.",
+            "Between here and there, infinity smiles.",
+            "In motion's heart, perfect stillness beats.",
+            "To begin is to end in the circle of paradox."
+        ];
+
+        const displayMessage = () => {
+            message.textContent = messages[Math.abs(rotations) % messages.length];
+            message.style.opacity = 1;
+            setTimeout(() => message.style.opacity = 0, 5000);
+        };
+
+        const playSound = (deltaAngle) => {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            const baseFreq = 440 * Math.pow(2, (Math.abs(rotations) % 12) / 12);
+            oscillator.frequency.setValueAtTime(baseFreq, audioContext.currentTime);
+            
+            gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+            
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 0.5);
+        };
+
+        const handleMove = (e) => moveBar(Math.atan2(e.clientY - cy, e.clientX - cx));
+
+        window.addEventListener('resize', resize);
+        c.addEventListener('mousedown', () => c.addEventListener('mousemove', handleMove));
+        c.addEventListener('mouseup', () => c.removeEventListener('mousemove', handleMove));
+        c.addEventListener('mouseleave', () => c.removeEventListener('mousemove', handleMove));
+        c.addEventListener('click', (e) => moveBar(Math.atan2(e.clientY - cy, e.clientX - cx)));
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') moveBar(angle + 0.1);
+        });
+
+        resize();
+        update();
+    </script>
+</body>
+</html>
